@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube No-Cookie Redirect</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 YouTube No-Cookie</h1>
+        
+        <div class="status">
+            <p><strong>Stato:</strong> <span id="status-text">Attivo</span></p>
+            <div class="status-indicator active"></div>
+        </div>
+
+        <div class="info">
+            <h2>ℹ️ Informazioni</h2>
+            <p>Questa estensione reindirizza automaticamente i video YouTube alla versione no-cookie:</p>
+            <p><code>https://www.yout-ube.com/watch?v=ID</code></p>
+            <p><strong>Note:</strong></p>
+            <ul>
+                <li>✅ Video normali: reindirizzati automaticamente</li>
+                <li>❌ YouTube Shorts: NON reindirizzati (rimangono su youtube.com)</li>
+                <li>🔄 Funziona con URL brevi (youtu.be)</li>
+            </ul>
+        </div>
+
+        <div class="settings">
+            <h2>⚙️ Impostazioni</h2>
+            <label class="toggle">
+                <input type="checkbox" id="enable-toggle" checked>
+                <span>Estensione abilitata</span>
+            </label>
+            <label class="toggle">
+                <input type="checkbox" id="redirect-shorts" disabled>
+                <span>Reindirizza anche gli Shorts (consigliato: disabilitato)</span>
+            </label>
+        </div>
+
+        <div class="footer">
+            <p>YouTube No-Cookie Redirect v1.0.0</p>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
