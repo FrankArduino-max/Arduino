@@ -1,15 +1,17 @@
 {
   "manifest_version": 3,
   "name": "YouTube No-Cookie Redirect",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reindirizza i video YouTube alla versione no-cookie, escludendo gli Shorts",
   "permissions": [
-    "webRequest",
-    "tabs"
+    "tabs",
+    "storage"
   ],
   "host_permissions": [
-    "https://*.youtube.com/*",
-    "https://*.youtu.be/*"
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
+    "https://youtu.be/*",
+    "https://www.yout-ube.com/*"
   ],
   "background": {
     "service_worker": "background.js"
