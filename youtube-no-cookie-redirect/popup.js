@@ -19,8 +19,11 @@ function initializePopup() {
   // Ascolta i cambiamenti del toggle
   enableToggle.addEventListener('change', (e) => {
     const enabled = e.target.checked;
-    chrome.storage.local.set({ extensionEnabled: enabled });
-    updateStatus(enabled);
+    // Salva immediatamente nello storage
+    chrome.storage.local.set({ extensionEnabled: enabled }, () => {
+      updateStatus(enabled);
+      console.log('Estensione ' + (enabled ? 'abilitata' : 'disabilitata'));
+    });
   });
 }
 
