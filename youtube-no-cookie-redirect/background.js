@@ -4,11 +4,14 @@
  * alla versione no-cookie (yout-ube.com)
  */
 
+console.log('[YT-NoC] Service Worker inizializzato');
+
 // Traccia gli URL già reindirizzati per evitare loop infiniti
-const redirectedUrls = new Set();
+const redirectedUrls = new Map();
 
 // Ascolta i tab creati (NEW TABS)
 chrome.tabs.onCreated.addListener((tab) => {
+  console.log('[YT-NoC] Tab creato:', tab.url);
   if (tab.url) {
     handleYouTubeUrl(tab.id, tab.url);
   }
@@ -16,10 +19,10 @@ chrome.tabs.onCreated.addListener((tab) => {
 
 // Ascolta gli aggiornamenti della scheda (NAVIGATION)
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  // Reindirizza solo quando l'URL è finito di caricare (committed)
-  // Questo evita il loop di reindirizzamento infinito
-  if (changeInfo.status === 'loading' && tab.url && !redirectedUrls.has(tab.url)) {
-    handleYouTubeUrl(tabId, tab.url);
+  // Reindirizza quando l'URL cambia
+  if (changeInfo.url && !redirectedUrls.has(changeInfo.url)) {
+    console.log('[YT-NoC] URL aggiornato in tab', tabId, ':', changeInfo.url);
+    handleYouTubeUrl(tabId, changeInfo.url);
   }
 });
 
@@ -29,28 +32,34 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
  * @param {string} url - URL della pagina
  */
 function handleYouTubeUrl(tabId, url) {
-  // Controlla se l'estensione è abilitata
-  chrome.storage.local.get('extensionEnabled', (data) => {
-    const isEnabled = data.extensionEnabled !== false;
+  // Controlla se l'estensione è abilitata (DEFAULT: TRUE)
+  chrome.storage.local.get({ extensionEnabled: true }, (data) => {
+    const isEnabled = data.extensionEnabled;
+    console.log('[YT-NoC] Estensione abilitata:', isEnabled);
     
     if (!isEnabled) {
+      console.log('[YT-NoC] Estensione disabilitata, skip');
       return;
     }
 
     const redirectUrl = convertToNoCookieUrl(url);
     
     if (redirectUrl && redirectUrl !== url) {
-      // Marca questo URL come reindirizzato per evitare il loop
-      redirectedUrls.add(url);
-      redirectedUrls.add(redirectUrl);
+      console.log('[YT-NoC] Reindirizzamento:', url, '→', redirectUrl);
       
-      // Limita la dimensione del Set a 100 URL
-      if (redirectedUrls.size > 100) {
-        const firstUrl = redirectedUrls.values().next().value;
-        redirectedUrls.delete(firstUrl);
+      // Marca questo URL come reindirizzato per evitare il loop
+      redirectedUrls.set(url, true);
+      redirectedUrls.set(redirectUrl, true);
+      
+      // Limita la dimensione della Map a 200 URL
+      if (redirectedUrls.size > 200) {
+        const firstKey = redirectedUrls.keys().next().value;
+        redirectedUrls.delete(firstKey);
       }
       
       chrome.tabs.update(tabId, { url: redirectUrl });
+    } else {
+      console.log('[YT-NoC] Nessun reindirizzamento necessario per:', url);
     }
   });
 }
@@ -65,25 +74,32 @@ function convertToNoCookieUrl(url) {
   try {
     // Non reindirizzare gli Shorts
     if (url.includes('/shorts/')) {
+      console.log('[YT-NoC] È uno Short, skip');
       return null;
     }
 
     // Non reindirizzare se già su yout-ube.com
     if (url.includes('yout-ube.com')) {
+      console.log('[YT-NoC] Già su yout-ube.com, skip');
       return null;
     }
 
     const urlObj = new URL(url);
     const hostname = urlObj.hostname;
 
+    console.log('[YT-NoC] Hostname:', hostname);
+
     // Gestisci youtube.com
     if (hostname === 'www.youtube.com' || hostname === 'youtube.com') {
       // Verifica se è un URL di un video
       const videoId = extractVideoId(url);
       
+      console.log('[YT-NoC] Video ID estratto:', videoId);
+      
       if (videoId && urlObj.pathname.startsWith('/watch')) {
         // Converti a yout-ube.com
         const noCookieUrl = `https://www.yout-ube.com/watch?v=${videoId}`;
+        console.log('[YT-NoC] URL da reindirizzare:', noCookieUrl);
         return noCookieUrl;
       }
     }
@@ -91,6 +107,8 @@ function convertToNoCookieUrl(url) {
     // Gestisci youtu.be (URL brevi)
     if (hostname === 'youtu.be') {
       const videoId = urlObj.pathname.slice(1).split('?')[0];
+      
+      console.log('[YT-NoC] youtu.be Video ID:', videoId);
       
       if (videoId && videoId.length > 0) {
         // Converti a yout-ube.com
@@ -101,7 +119,7 @@ function convertToNoCookieUrl(url) {
 
     return null;
   } catch (e) {
-    console.error('Errore nella conversione URL:', e);
+    console.error('[YT-NoC] Errore nella conversione URL:', e);
     return null;
   }
 }
@@ -117,21 +135,26 @@ function extractVideoId(url) {
     
     // Da youtube.com/watch?v=ID
     if (urlObj.searchParams.has('v')) {
-      return urlObj.searchParams.get('v');
+      const videoId = urlObj.searchParams.get('v');
+      console.log('[YT-NoC] Video ID da searchParams:', videoId);
+      return videoId;
     }
     
     // Da youtu.be/ID
     if (url.includes('youtu.be/')) {
       const parts = url.split('youtu.be/')[1];
-      return parts ? parts.split('?')[0] : null;
+      const videoId = parts ? parts.split('?')[0] : null;
+      console.log('[YT-NoC] Video ID da youtu.be:', videoId);
+      return videoId;
     }
     
+    console.log('[YT-NoC] Video ID non trovato');
     return null;
   } catch (e) {
-    console.error('Errore nell\'estrazione dell\'ID video:', e);
+    console.error('[YT-NoC] Errore nell\'estrazione dell\'ID video:', e);
     return null;
   }
 }
 
 // Log di attivazione dell'estensione
-console.log('YouTube No-Cookie Redirect Extension caricata');
+console.log('[YT-NoC] YouTube No-Cookie Redirect Extension v1.0.1 caricata');
