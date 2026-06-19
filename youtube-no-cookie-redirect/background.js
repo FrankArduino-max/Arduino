@@ -4,17 +4,22 @@
  * alla versione no-cookie (yout-ube.com)
  */
 
-// Ascoltta i tab aggiornati
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'loading' && tab.url) {
-    handleYouTubeUrl(tabId, tab.url);
-  }
-});
+// Traccia gli URL già reindirizzati per evitare loop infiniti
+const redirectedUrls = new Set();
 
-// Ascolta i tab creati
+// Ascolta i tab creati (NEW TABS)
 chrome.tabs.onCreated.addListener((tab) => {
   if (tab.url) {
     handleYouTubeUrl(tab.id, tab.url);
+  }
+});
+
+// Ascolta gli aggiornamenti della scheda (NAVIGATION)
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  // Reindirizza solo quando l'URL è finito di caricare (committed)
+  // Questo evita il loop di reindirizzamento infinito
+  if (changeInfo.status === 'loading' && tab.url && !redirectedUrls.has(tab.url)) {
+    handleYouTubeUrl(tabId, tab.url);
   }
 });
 
@@ -24,11 +29,30 @@ chrome.tabs.onCreated.addListener((tab) => {
  * @param {string} url - URL della pagina
  */
 function handleYouTubeUrl(tabId, url) {
-  const redirectUrl = convertToNoCookieUrl(url);
-  
-  if (redirectUrl && redirectUrl !== url) {
-    chrome.tabs.update(tabId, { url: redirectUrl });
-  }
+  // Controlla se l'estensione è abilitata
+  chrome.storage.local.get('extensionEnabled', (data) => {
+    const isEnabled = data.extensionEnabled !== false;
+    
+    if (!isEnabled) {
+      return;
+    }
+
+    const redirectUrl = convertToNoCookieUrl(url);
+    
+    if (redirectUrl && redirectUrl !== url) {
+      // Marca questo URL come reindirizzato per evitare il loop
+      redirectedUrls.add(url);
+      redirectedUrls.add(redirectUrl);
+      
+      // Limita la dimensione del Set a 100 URL
+      if (redirectedUrls.size > 100) {
+        const firstUrl = redirectedUrls.values().next().value;
+        redirectedUrls.delete(firstUrl);
+      }
+      
+      chrome.tabs.update(tabId, { url: redirectUrl });
+    }
+  });
 }
 
 /**
@@ -38,38 +62,48 @@ function handleYouTubeUrl(tabId, url) {
  * @returns {string|null} URL convertito o null se non applicabile
  */
 function convertToNoCookieUrl(url) {
-  // Non reindirizzare gli Shorts
-  if (url.includes('/shorts/')) {
+  try {
+    // Non reindirizzare gli Shorts
+    if (url.includes('/shorts/')) {
+      return null;
+    }
+
+    // Non reindirizzare se già su yout-ube.com
+    if (url.includes('yout-ube.com')) {
+      return null;
+    }
+
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname;
+
+    // Gestisci youtube.com
+    if (hostname === 'www.youtube.com' || hostname === 'youtube.com') {
+      // Verifica se è un URL di un video
+      const videoId = extractVideoId(url);
+      
+      if (videoId && urlObj.pathname.startsWith('/watch')) {
+        // Converti a yout-ube.com
+        const noCookieUrl = `https://www.yout-ube.com/watch?v=${videoId}`;
+        return noCookieUrl;
+      }
+    }
+
+    // Gestisci youtu.be (URL brevi)
+    if (hostname === 'youtu.be') {
+      const videoId = urlObj.pathname.slice(1).split('?')[0];
+      
+      if (videoId && videoId.length > 0) {
+        // Converti a yout-ube.com
+        const noCookieUrl = `https://www.yout-ube.com/watch?v=${videoId}`;
+        return noCookieUrl;
+      }
+    }
+
+    return null;
+  } catch (e) {
+    console.error('Errore nella conversione URL:', e);
     return null;
   }
-
-  const urlObj = new URL(url);
-  const hostname = urlObj.hostname;
-
-  // Gestisci youtube.com
-  if (hostname === 'www.youtube.com' || hostname === 'youtube.com') {
-    // Verifica se è un URL di un video
-    const videoId = extractVideoId(url);
-    
-    if (videoId && urlObj.pathname.startsWith('/watch')) {
-      // Converti a yout-ube.com
-      const noCookieUrl = `https://www.yout-ube.com/watch?v=${videoId}`;
-      return noCookieUrl;
-    }
-  }
-
-  // Gestisci youtu.be (URL brevi)
-  if (hostname === 'youtu.be') {
-    const videoId = urlObj.pathname.slice(1).split('?')[0];
-    
-    if (videoId && videoId.length > 0) {
-      // Converti a yout-ube.com
-      const noCookieUrl = `https://www.yout-ube.com/watch?v=${videoId}`;
-      return noCookieUrl;
-    }
-  }
-
-  return null;
 }
 
 /**
